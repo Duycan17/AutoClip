@@ -1,0 +1,51 @@
+name: Windows release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-release-v1.1.2
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out private release source
+        uses: actions/checkout@v4
+        with:
+          repository: Duycan17/AutoClip-Source
+          ref: 3bf07cbbcdd2a64864e8b9c850a9627eacd5a796
+          ssh-key: ${{ secrets.SOURCE_RELEASE_READ_KEY }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install build dependencies
+        run: |
+          npm ci
+          python -m pip install -r requirements-build.txt
+      - name: Build Windows Portable and Setup
+        run: npm run desktop:package -- --win --x64 --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Check frozen backend and four-second range cut
+        run: python tests/desktop_package_smoke.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AutoClip-Windows-v1.1.2-x64
+          path: dist/desktop/*.exe
+          if-no-files-found: error
+      - name: Upload tested installers to public release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload v1.1.2 dist/desktop/*.exe --repo Duycan17/AutoClip
